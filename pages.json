@@ -1,0 +1,18 @@
+{
+  "pages": [
+    {
+      "path": "pages/list/index",
+      "style": {
+        "navigationBarTitleText": ""
+      }
+    },
+    {
+    	"path" : "pages/list/CustomModal/CustomModal",
+    	"style" : 
+    	{
+    		"navigationBarTitleText" : ""
+    	}
+    }
+  ]
+  
+}
