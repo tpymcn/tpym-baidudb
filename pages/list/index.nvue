@@ -1,0 +1,668 @@
+<template>
+	
+	<view class="container">
+		  <view class="bannercontainer">  
+		    <!-- 轮播图 -->  
+		    <swiper   class="swiper"   indicator-dots="true" autoplay="true" interval="5000" duration="500">  
+		      <swiper-item v-for="(item, index) in processedBannerList" :key="index">  
+		        <image class="slide-image" :src="item.image" mode="aspectFill" @click="mynavigateTourl(item.url)"></image>  
+		      </swiper-item>  
+		    </swiper>  
+		  </view>  
+		  <!-- 公告 -->  
+		  <uni-card v-if="showShareNotice" :is-shadow="true" is-full>
+		  	<text class="uni-h6" v-html="shareNotice"></text>
+		  </uni-card>
+		  <!-- 导航 -->  
+			 <uni-section  v-if="showShareNav" title="" type="" padding>    
+			    <view class="example-body">  
+			      <view class="tag-view" v-for="(item, index) in processedDirList" :key="index" @click="handleTagClick(item)">  
+			        <view :class="['nav-tag', item.inverted ? 'nav-tag-inverted' : '']" :style="{'background-color': getTagColor(item.type)}">
+			          <text :style="{color: item.inverted ? getTagColor(item.type) : '#fff'}">{{item.name}}</text>
+			        </view>
+			      </view>  
+			    </view>  
+			  </uni-section> 
+
+			<!-- 搜索 -->  
+			<uni-section v-if="showShareSearch" title=""  type="" padding  >
+<uni-search-bar @confirm="search" :focus="true" v-model="keyword"  @cancel="search" >
+			</uni-search-bar>
+			</uni-section>
+			<!-- 面包屑 -->  
+	<uni-section title="" type="" padding v-if="path_list.length > 0">
+	<view class="tpym-breadcrumb-con" >
+			<text @click="navigateTopath('')" >主页 /</text>
+			<view v-for="(item,index) in path_list" :key="index">
+				<text @click="navigateTopath(item.path_all)" >{{item.name}}/</text>
+			</view>
+		</view>
+	</uni-section>
+<uni-section title="" >
+			<uni-list class="FileList">
+				<view v-if="processedFileList.length === 0" class="no-data-message" @click="navigateTopath('')">
+				    未查询到数据,点击返回
+				  </view> 
+				<uni-list-chat 
+				v-else
+				v-for="item in processedFileList" 
+				:key="item.id" 
+				:title="item.server_filename" 
+				:avatar="item.isdir === 1? '/static/dir.png':item.iconPath"
+				:note="item.path"
+				:time="item.isdir === 1 ? null : item.formattedSize"  
+				:badge-text="item.isdir === 1 ? null : item.extend"  
+				:clickable="item.isdir!== 0" 
+				@click="navigateTopath(item.realpath)"></uni-list-chat>
+			</uni-list>
+		</uni-section>
+
+<!-- 分页 
+		<uni-section title="图标样式" subTitle="使用 show-icon 属性显示图标按钮" type="line" padding>
+			<uni-pagination :show-icon="true" :total="50" title="标题文字" />
+		</uni-section>
+		--> 
+		
+
+<!-- 底部 									
+			<uni-section title="" type="" padding >
+							<button class="button" type="primary" @click="shareToggle"><text class="button-text">分享模版示例</text></button>
+			</uni-section>
+		-->  	
+		<!-- 提示信息弹窗 -->
+		<view>
+			<uni-popup ref="message" type="message">
+				<uni-popup-message :type="msgType" :message="messageText" :duration="2000"></uni-popup-message>
+			</uni-popup>
+		</view>
+		<!-- 分享示例 -->
+		<uni-popup ref="share" type="share" safeArea backgroundColor="#fff">
+			<uni-popup-share></uni-popup-share>
+		</uni-popup>
+		
+		<view class="copyright" @click="showCopyrightInfo">  
+		      © 2024 版权所有  
+		    </view>
+	</view>
+</template>
+
+<script>
+	export default {
+		components: {},
+		data() {
+			return {
+				app:'',
+				dir_id:'',
+				CopyrightInfo:'',
+				apihost:'https://pan.tpym.cn',
+				cdn_domain:'',
+				dirList: [],
+				fileList: [],
+				path_list:[],
+				info: [],
+				keyword:'',
+				showShareNotice:false,
+				showShareNav:true,
+				showShareSearch:false,
+				showShareBanner:false,
+				shareNotice:'',
+				shareTitle:'',
+				bannerList:[], 
+				current: 3,
+				total: 10,
+				pageSize: 10,
+				type: 'center',
+				msgType: 'success',
+				messageText: '这是一条成功提示',
+				value: ''
+			};
+		},
+		onLoad: function(options) {  
+		   this.app = options.app || ''; 
+		   this.dir_id = options.dir_id || ''; 
+		   this.path = options.path || ''; 
+		   this.keyword = options.keyword || ''; 
+		   this.getinfo();
+		}, 
+		computed: {  
+			    processedBannerList() {
+			      return this.bannerList.map(item => ({  
+			        image: this.cdn_domain+`/${item.image}`,  
+			        url: `${item.url}`, 
+			      }));  
+			    },
+			processedDirList(){
+					const tagTypes = ['primary', 'success', 'warning', 'error']; 
+					const dirList = Array.isArray(this.dirList) ? this.dirList : Object.values(this.dirList);
+					const processedList = dirList.map(item => {  
+					  return {  
+					    inverted: item.id != this.dir_id,  
+					    type: tagTypes[Math.floor(Math.random() * tagTypes.length)],  
+					    name: item.name || '',  
+					    id: item.id || '',  
+					    url: item.url || '',  
+					    is_custom: item.is_custom || '',  
+					  };  
+					});  
+					  return processedList;
+				},
+				processedFileList(){
+					 return this.fileList.map(item => ({  
+					        server_filename: item.server_filename, 
+					        path: item.path, 
+							realpath:item.realpath, 
+							isdir:parseInt(item.isdir), 
+					        formattedSize: this.formatFileSize(item.size),
+					        iconPath: `/static/${item.file.toLowerCase()}.png`, 
+					        extend: `${item.file.toLowerCase()}`, 
+					      }));  
+				},
+			  }, 
+		mounted() {  
+			  },
+		methods: {
+			 handleTagClick(item) {  
+			      if (item.is_custom==0) {  
+			        this.mynavigateTo(item.id);  
+			      } else {  
+			        this.mynavigateTourl(item.url);  
+			      }  
+			    }, 
+			mynavigateTo(id) {
+				if (id == '') return;
+				let url="/?app="+this.app+"&dir_id="+id;
+				uni.navigateTo({
+					url: url
+				});
+				this.dir_id=id;
+				this.path=''; 
+				this.keyword= '';
+				this.fetchFileList();
+				this.resetshareinfo();
+			  },
+			  mynavigateTourl(url) {
+			  	if (url == '') return;
+			  	window.open(url, '_blank');
+			    },
+			  navigateTopath(path) {
+			  	let url="/?app="+this.app+"&dir_id="+this.dir_id+"&path="+path;
+			  	uni.navigateTo({
+			  		url: url
+			  	});
+				this.path=path;
+				this.keyword= '';
+				this.fetchFileList();
+			    },
+				search(res) {
+					let url="/?app="+this.app+"&dir_id="+this.dir_id+"&path="+this.path+"&keyword="+res.value;
+					uni.navigateTo({
+						url: url
+					});
+							this.path='';
+							this.keyword=res.value;
+							this.fetchFileList();
+				},
+		getinfo() {
+			let currentDomain = window.location.hostname; 
+		    uni.request({  	  
+		    url: this.apihost+'/api/info', 
+			data: {domain: currentDomain, app:this.app || ''},
+		      success: (res) => { 
+				  if(res.data && res.data.code && res.data.code !== 0){
+					  uni.showToast({
+						icon:"none",
+					  	title: res.data.message || '请求失败'
+					  })
+					  return;
+				  }
+				  if(res.data && res.data.app){
+					  this.app = res.data.app;
+					  this.dirList = res.data.dir_list || [];
+					  this.bannerList = res.data.image_list || [];
+					  this.shareNotice = res.data.user ? res.data.user.share_notice : '';
+					  this.shareTitle = res.data.user ? res.data.user.share_title : '';
+					  this.CopyrightInfo = res.data.user ? res.data.user.copyright : '';
+					  this.cdn_domain = res.data.cdn_domain || this.apihost;
+					  
+					  // 根据 share_show 配置显示/隐藏各模块
+					  if(res.data.user && res.data.user.share_show){
+						try{
+							var showset = JSON.parse(res.data.user.share_show);
+							this.showShareNav = showset.nav == '1';
+							this.showShareNotice = showset.notice == '1';
+							this.showShareSearch = showset.search == '1';
+							this.showShareBanner = showset.banner == '1';
+						}catch(e){}
+					  }
+					  
+					  // 默认显示导航（如果有目录数据）
+					  if(this.dirList.length > 0){
+						  this.showShareNav = true;
+					  }
+					  
+					  // 如果有目录但未指定 dir_id，自动获取第一个目录的文件
+					  if(this.dirList.length > 0 && !this.dir_id){
+						  this.dir_id = this.dirList[0].id;
+						  this.fetchFileList();
+					  }else if(this.dir_id){
+						  this.fetchFileList();
+					  }
+					  
+					  if(res.data.user && res.data.user.share_tongjicode){
+						this.executeScriptFromString(res.data.user.share_tongjicode); 
+					  }
+				  }
+		      },  
+		      fail: (err) => { 
+				  uni.showToast({icon:"none",title: 'info请求失败'})
+		        console.error('请求失败', err);  
+		      }  
+		    });  
+		  },
+			  fetchFileList() {
+				  if(!this.dir_id && this.dir_id !== 0){
+					  return;
+				  }
+				  uni.showLoading({ title: '加载中', mask: true });
+				  
+				  let currentDomain = window.location.hostname;
+			      uni.request({  
+			        url: this.apihost+'/api/filelist', 
+					  data: {
+					      domain: currentDomain,
+					      app:this.app || '',
+						  dir_id:this.dir_id,
+						  path:this.path || '',
+						  keyword:this.keyword || ''
+					  },
+			        success: (res) => { 
+						uni.hideLoading();
+			          if (res.statusCode === 200 && res.data) {  
+			            this.fileList = res.data.file_list || []; 
+					this.path_list = res.data.path_list || [];
+						  } else {  
+							console.error('请求失败', res.statusCode);  
+						  }  
+			        },  
+			        fail: (err) => {  
+					  uni.showToast({icon:"none",title: 'FileList请求失败'})
+			          console.error('请求失败', err); 
+					  uni.hideLoading();
+			        }  
+			      });  
+			    },
+			 open(){
+			        // 通过组件定义的ref调用uni-popup方法 ,如果传入参数 ，type 属性将失效 ，仅支持 ['top','left','bottom','right','center']
+			        this.$refs.popup.open('top')
+			      },
+			shareToggle() {
+				console.log(this.$refs); // 查看所有 refs  
+				this.$refs.share.open()
+			},
+		resetshareinfo(){
+			uni.request({
+			  url: this.apihost+'/api/info', // 替换为你的api.php接口地址 
+				data: {
+					app:this.app,
+					dir_id:this.dir_id,
+				},				  
+			  success: (res) => { 
+				  console.log(res);
+			    if (res.statusCode === 200) {
+					if(!this.isEmptyOrUndefined(res.data.dir_notice)){
+					this.shareNotice=res.data.dir_notice;
+					}
+					if(!this.isEmptyOrUndefined(res.data.dir_image)){
+					this.bannerList=res.data.dir_image;
+					}
+					if(!this.isEmptyOrUndefined(res.data.dir_name)){
+					uni.setNavigationBarTitle({
+					      title: res.data.dir_name 
+					    }); 
+					}
+				}  
+			     
+			  },  
+			  fail: (err) => {  
+				uni.showToast({icon:"none",title: 'FileList请求失败'})
+			    console.error('请求失败', err); 
+				uni.hideLoading();
+			  }  
+			});  
+		},
+		executeScriptFromString(scriptString) {  
+		    const script = document.createElement('script');    
+		    script.textContent = scriptString;  
+		    document.head.appendChild(script);  
+		},
+		 getApiEndpoint() {
+		   const configPath = 'static/config.json';
+		   let apiEndpoint='';
+		uni.request({  
+		  url: configPath, // 根据实际路径调整  
+		  method: 'GET',  
+		  success: (res) => {  
+		    if (res.statusCode === 200) {  
+		      // 检查 res.data 是否已经是对象  
+		      if (typeof res.data === 'string') {  
+		        try {  
+		          const config = JSON.parse(res.data);  
+		          apiEndpoint = config.apiEndpoint;  
+		          console.log('API Config:', apiEndpoint);  
+		        } catch (error) {  
+		          console.error('Failed to parse JSON:', error);  
+		        }  
+		      } else if (typeof res.data === 'object' && res.data !== null) {  
+		        apiEndpoint = res.data.apiEndpoint;   
+		        console.log('API Config:', apiEndpoint); 
+		   return apiEndpoint;
+		      } else {  
+		        console.error('Unexpected response type:', typeof res.data);  
+		      }  
+		    } else {  
+		      console.error('Failed to load API config:', res);  
+		    }  
+		  },  
+		  fail: (err) => {  
+		    console.error('Request failed:', err);  
+		  }  
+		});
+		   return apiEndpoint;
+		 },
+		formatFileSize(bytes) {  
+			     if (bytes === 0) return '0 Bytes';  
+			     const k = 1024;  
+			     const dm = decimalPlaces => Math.round(decimalPlaces * Math.pow(10, decimalPlaces)) / Math.pow(10, decimalPlaces);  
+			     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];  
+			     const i = Math.floor(Math.log(bytes) / Math.log(k)); 
+			     return dm(bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i];  
+			   },
+		 showCopyrightInfo() {  
+		      uni.showModal({  
+		        title: '版权说明',  
+		        content: this.CopyrightInfo,  
+		        showCancel: false, // 不显示取消按钮  
+		        confirmText: '了解',  
+		        success: function (res) {  
+		          if (res.confirm) {  
+		            console.log('用户点击了确定');  
+		            // 这里可以添加点击确定后的处理逻辑，但在这个场景中可能不需要  
+		          }  
+		        }  
+		      });  
+		    },
+			copyText(value) {
+		       uni.setClipboardData({
+		         data: value,
+		         success: function () {
+		           console.log('复制成功');
+		           uni.showToast({
+		             title: '复制成功',
+		             icon: 'success',
+		             duration: 2000
+		           });
+		         }
+		       });
+		     },	 
+			 isEmptyOrUndefined(value) {  
+			    // 检查是否为 null、undefined 或者空字符串  
+			    return value === null || value === undefined || value === '';  
+			},
+			getTagColor(type){
+				const colors = {
+					'primary': '#007aff',
+					'success': '#4cd964',
+					'warning': '#f0ad4e',
+					'error': '#dd524d',
+					'default': '#999'
+				};
+				return colors[type] || colors['default'];
+			} 
+		}
+	};
+</script>
+
+<style lang="scss">
+	.container{
+		max-width: 960rpx;
+		margin: 0 auto;
+	}
+	.bannercontainer {  
+	  width: 100%;  
+	  height: 150px; /* 你可以根据需要调整高度 */  
+	}  
+	.swiper {  
+	  width: 100%;  
+	  height: 100%;  
+	}  
+	.slide-image {  
+	  width: 100%;  
+	  height: 100%;  
+	}  
+	.slot-box {
+		/* #ifndef APP-NVUE */
+		display: flex;
+		/* #endif */
+		flex-direction: row;
+		align-items: center;
+	}
+	.slot-image {
+		/* #ifndef APP-NVUE */
+		display: block;
+		/* #endif */
+		margin-right: 10px;
+		width: 30px;
+		height: 30px;
+	}
+
+	.slot-text {
+		flex: 1;
+		font-size: 14px;
+		color: #4cd964;
+		margin-right: 10px;
+	}
+	.example-body{display:flex;flex-direction:row;justify-content:flex-start;align-items:center;flex-wrap:wrap;padding:20rpx 30rpx}
+	.tag-view{margin-right:20rpx;margin-bottom:16rpx;display:inline-block}
+	.nav-tag{padding:12rpx 28rpx;border-radius:10rpx;font-size:28rpx;box-shadow:0 2rpx 8rpx rgba(0,0,0,0.1)}
+	.nav-tag-inverted{background-color:transparent!important;border:1rpx dashed;box-shadow:none}
+.uni-breadcrumb-item  .uni-breadcrumb-item--slot{
+    display: block;
+    float: left;
+}
+	@mixin flex {
+		/* #ifndef APP-NVUE */
+		display: flex;
+		/* #endif */
+		flex-direction: row;
+	}
+
+	@mixin height {
+		/* #ifndef APP-NVUE */
+		height: 100%;
+		/* #endif */
+		/* #ifdef APP-NVUE */
+		flex: 1;
+		/* #endif */
+	}
+
+	.box {
+		@include flex;
+	}
+
+	.button {
+		@include flex;
+		align-items: center;
+		justify-content: center;
+		flex: 1;
+		height: 35px;
+		margin: 0 5px;
+		border-radius: 5px;
+	}
+
+	.example-body {
+		background-color: #fff;
+		padding: 5px 5px;
+	}
+
+	.button-text {
+		color: #fff;
+		font-size: 12px;
+	}
+
+	.popup-content {
+		@include flex;
+		align-items: center;
+		justify-content: center;
+		padding: 15px;
+		height: 50px;
+		background-color: #fff;
+	}
+
+	.popup-height {
+		@include height;
+		width: 200px;
+	}
+
+	.text {
+		font-size: 12px;
+		color: #333;
+	}
+
+	.popup-success {
+		color: #fff;
+		background-color: #e1f3d8;
+	}
+
+	.popup-warn {
+		color: #fff;
+		background-color: #faecd8;
+	}
+
+	.popup-error {
+		color: #fff;
+		background-color: #fde2e2;
+	}
+
+	.popup-info {
+		color: #fff;
+		background-color: #f2f6fc;
+	}
+
+	.success-text {
+		color: #09bb07;
+	}
+
+	.warn-text {
+		color: #e6a23c;
+	}
+
+	.error-text {
+		color: #f56c6c;
+	}
+
+	.info-text {
+		color: #909399;
+	}
+
+	.dialog,
+	.share {
+		/* #ifndef APP-NVUE */
+		display: flex;
+		/* #endif */
+		flex-direction: column;
+	}
+
+	.dialog-box {
+		padding: 10px;
+	}
+
+	.dialog .button,
+	.share .button {
+		/* #ifndef APP-NVUE */
+		width: 100%;
+		/* #endif */
+		margin: 0;
+		margin-top: 10px;
+		padding: 3px 0;
+		flex: 1;
+	}
+
+	.dialog-text {
+		font-size: 14px;
+		color: #333;
+	}
+	.image {
+		width: 25px;
+		height: 25px;
+	}
+
+	.text {
+		font-size: 14px;
+		margin-top: 5px;
+	}
+
+	.example-body {
+		/* #ifndef APP-NVUE */
+		// display: block;
+		/* #endif */
+	}
+
+	.grid-dynamic-box {
+		margin-bottom: 15px;
+	}
+
+	.grid-item-box {
+		flex: 1;
+		// position: relative;
+		/* #ifndef APP-NVUE */
+		display: flex;
+		/* #endif */
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 15px 0;
+	}
+
+	.grid-item-box-row {
+		flex: 1;
+		// position: relative;
+		/* #ifndef APP-NVUE */
+		display: flex;
+		/* #endif */
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		padding: 15px 0;
+	}
+
+	.grid-dot {
+		position: absolute;
+		top: 5px;
+		right: 15px;
+	}
+
+.copyright {  
+	position: fixed; 
+	bottom: 0;
+    width: 100%;  
+	max-width: 480px;
+    text-align: center;  
+    padding: 2px 0;  
+    /* 使用rgba设置半透明背景 */  
+    background-color: rgba(255, 255, 255, 0.1);
+    font-size: 10px; 
+    color: #333; 
+}
+.tpym-breadcrumb-con {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap; 
+	padding: 8rpx 15rpx;
+	background: #f8f8f8;
+	border-radius: 10rpx;
+	margin: 20rpx 30rpx;
+	view text {margin-right: 15rpx;color:#2979ff;}
+	}
+.no-data-message{text-align: center;padding: 15rpx;color: #007aff;}
+.FileList{margin-bottom: 20px;}
+</style>
